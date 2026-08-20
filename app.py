@@ -9,7 +9,6 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 # =========================================================
 # CUSTOM TRANSFORMER
-# IMPORTANT: Must exist BEFORE loading the .pkl
 # =========================================================
 class BooleanToIntTransformer(BaseEstimator, TransformerMixin):
 
@@ -19,10 +18,12 @@ class BooleanToIntTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X):
 
         if isinstance(X, pd.Series):
-            return X.replace({True: 1, False: 0}).to_frame()
+            return X.map({True: 1, False: 0}).to_frame()
 
         if isinstance(X, pd.DataFrame):
-            return X.replace({True: 1, False: 0})
+            return X.map(
+                lambda x: 1 if x is True else 0 if x is False else x
+            )
 
         return X
 
@@ -46,84 +47,87 @@ st.set_page_config(
 
 
 # =========================================================
-# CUSTOM CSS
+# CSS
 # =========================================================
-st.markdown("""
-<style>
+st.markdown(
+    """
+    <style>
 
-.block-container {
-    padding-top: 1.5rem;
-    padding-bottom: 2rem;
-}
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
+    }
 
-.hero {
-    padding: 28px;
-    border-radius: 20px;
-    margin-bottom: 22px;
-    background: linear-gradient(135deg, #111827, #172554);
-    border: 1px solid rgba(255,255,255,.10);
-}
+    .hero {
+        padding: 28px;
+        border-radius: 20px;
+        margin-bottom: 22px;
+        background: linear-gradient(135deg, #111827, #172554);
+        border: 1px solid rgba(255,255,255,.10);
+    }
 
-.hero h1 {
-    font-size: 40px;
-    margin: 0 0 8px 0;
-}
+    .hero h1 {
+        font-size: 40px;
+        margin: 0 0 8px 0;
+    }
 
-.hero p {
-    color: #cbd5e1;
-    font-size: 16px;
-    margin: 4px 0;
-}
+    .hero p {
+        color: #cbd5e1;
+        font-size: 16px;
+        margin: 4px 0;
+    }
 
-.card {
-    padding: 18px;
-    border-radius: 16px;
-    background: linear-gradient(145deg, #111827, #1e293b);
-    border: 1px solid rgba(255,255,255,.08);
-    text-align: center;
-    min-height: 105px;
-}
+    .card {
+        padding: 18px;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #111827, #1e293b);
+        border: 1px solid rgba(255,255,255,.08);
+        text-align: center;
+        min-height: 105px;
+    }
 
-.card-title {
-    color: #94a3b8;
-    font-size: 13px;
-}
+    .card-title {
+        color: #94a3b8;
+        font-size: 13px;
+    }
 
-.card-value {
-    color: white;
-    font-size: 27px;
-    font-weight: 700;
-    margin-top: 7px;
-}
+    .card-value {
+        color: white;
+        font-size: 27px;
+        font-weight: 700;
+        margin-top: 7px;
+    }
 
-.section {
-    font-size: 22px;
-    font-weight: 700;
-    margin: 22px 0 12px;
-}
+    .section {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 22px 0 12px;
+    }
 
-.result {
-    padding: 28px;
-    border-radius: 20px;
-    text-align: center;
-    background: linear-gradient(135deg, #172554, #1e3a8a);
-    border: 1px solid rgba(255,255,255,.12);
-}
+    .result {
+        padding: 28px;
+        border-radius: 20px;
+        text-align: center;
+        background: linear-gradient(135deg, #172554, #1e3a8a);
+        border: 1px solid rgba(255,255,255,.12);
+    }
 
-.result-small {
-    color: #cbd5e1;
-    font-size: 15px;
-}
+    .result-small {
+        color: #cbd5e1;
+        font-size: 15px;
+    }
 
-.result-big {
-    color: white;
-    font-size: 40px;
-    font-weight: 800;
-    margin: 7px 0;
-}
+    .result-big {
+        color: white;
+        font-size: 40px;
+        font-weight: 800;
+        margin: 7px 0;
+    }
 
-</style>
-""", unsafe_allow_html=True)
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # =========================================================
@@ -152,29 +156,32 @@ except FileNotFoundError:
 except Exception as e:
 
     st.error("❌ Could not load best_severity_model.pkl")
-    st.code(str(e))
+    st.code(f"{type(e).__name__}: {str(e)}")
     st.stop()
 
 
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown("""
-<div class="hero">
+st.markdown(
+    """
+    <div class="hero">
 
-<h1>🚨 Accident Severity Intelligence</h1>
+    <h1>🚨 Accident Severity Intelligence</h1>
 
-<p>
-AI-powered US Traffic Accident Severity Prediction System
-</p>
+    <p>
+    AI-powered US Traffic Accident Severity Prediction System
+    </p>
 
-<p>
-Analyze weather, road, traffic and time conditions
-to predict accident severity.
-</p>
+    <p>
+    Analyze weather, road, traffic and time conditions
+    to predict accident severity.
+    </p>
 
-</div>
-""", unsafe_allow_html=True)
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # =========================================================
@@ -351,7 +358,7 @@ traffic_signal = st.sidebar.checkbox("Traffic Signal")
 
 
 # =========================================================
-# RAW INPUT DATA
+# INPUT DATA
 # =========================================================
 input_df = pd.DataFrame({
 
@@ -412,99 +419,6 @@ input_df = pd.DataFrame({
 
 
 # =========================================================
-# MODEL INPUT ALIGNMENT
-# =========================================================
-def prepare_model_input(model, df):
-
-    df = df.copy()
-
-    # -----------------------------------------------------
-    # Find the feature names stored by sklearn
-    # -----------------------------------------------------
-    expected_features = getattr(
-        model,
-        "feature_names_in_",
-        None
-    )
-
-    # If the model is a Pipeline, check the first step
-    if expected_features is None and hasattr(model, "named_steps"):
-
-        for _, step in model.named_steps.items():
-
-            if hasattr(step, "feature_names_in_"):
-
-                expected_features = step.feature_names_in_
-                break
-
-    # -----------------------------------------------------
-    # If feature names are available, align them
-    # -----------------------------------------------------
-    if expected_features is not None:
-
-        expected_features = list(expected_features)
-
-        # Common feature-name aliases
-        aliases = {
-
-            "Day_Of_Week": "DayOfWeek",
-            "Day_of_Week": "DayOfWeek",
-            "DayOfWeek": "DayOfWeek",
-
-            "Wind Chill(F)": "Wind_Chill(F)",
-            "Wind_Chill(F)": "Wind_Chill(F)",
-
-            "Wind Speed(mph)": "Wind_Speed(mph)",
-            "Wind_Speed(mph)": "Wind_Speed(mph)",
-
-            "Traffic Signal": "Traffic_Signal",
-            "Traffic_Signal": "Traffic_Signal",
-
-            "Traffic Calming": "Traffic_Calming",
-            "Traffic_Calming": "Traffic_Calming",
-
-            "Give Way": "Give_Way",
-            "Give_Way": "Give_Way",
-
-            "No Exit": "No_Exit",
-            "No_Exit": "No_Exit",
-
-            "Is Weekend": "Is_Weekend",
-            "Is_Weekend": "Is_Weekend",
-
-            "Is Rush Hour": "Is_Rush_Hour",
-            "Is_Rush_Hour": "Is_Rush_Hour",
-
-            "Is Night": "Is_Night",
-            "Is_Night": "Is_Night"
-        }
-
-        # Add missing expected columns
-        for feature in expected_features:
-
-            if feature not in df.columns:
-
-                source_feature = aliases.get(feature)
-
-                if (
-                    source_feature is not None
-                    and source_feature in df.columns
-                ):
-
-                    df[feature] = df[source_feature]
-
-                else:
-
-                    # Safe default
-                    df[feature] = 0
-
-        # Remove columns not used by the model
-        df = df[expected_features]
-
-    return df
-
-
-# =========================================================
 # CURRENT CONDITIONS
 # =========================================================
 st.markdown(
@@ -513,6 +427,7 @@ st.markdown(
 )
 
 c1, c2, c3, c4 = st.columns(4)
+
 
 with c1:
 
@@ -601,6 +516,7 @@ with c4:
 # =========================================================
 x1, x2, x3 = st.columns(3)
 
+
 with x1:
 
     if is_rush_hour:
@@ -655,70 +571,64 @@ if st.button(
 
     try:
 
-        # -------------------------------------------------
-        # Prepare exact model input
-        # -------------------------------------------------
-        model_input = prepare_model_input(
-            pipeline,
-            input_df
-        )
-
-        # -------------------------------------------------
-        # Prediction
-        # -------------------------------------------------
-        prediction = pipeline.predict(model_input)
+        # =================================================
+        # IMPORTANT:
+        # Send the original DataFrame directly.
+        # The saved pipeline should perform preprocessing.
+        # =================================================
+        prediction = pipeline.predict(input_df)
 
         raw_prediction = int(
             np.asarray(prediction).ravel()[0]
         )
 
-        # -------------------------------------------------
-        # Get model classes
-        # -------------------------------------------------
+
+        # =================================================
+        # GET FINAL MODEL
+        # =================================================
         model_step = None
 
         if hasattr(pipeline, "named_steps"):
 
-            model_step = pipeline.named_steps.get(
-                "model"
-            )
+            try:
 
-            # Sometimes final step has another name
-            if model_step is None:
+                model_step = list(
+                    pipeline.named_steps.values()
+                )[-1]
 
-                try:
+            except Exception:
 
-                    model_step = list(
-                        pipeline.named_steps.values()
-                    )[-1]
+                model_step = None
 
-                except Exception:
+        else:
 
-                    model_step = None
+            model_step = pipeline
 
+
+        # =================================================
+        # MODEL CLASSES
+        # =================================================
         model_classes = getattr(
             model_step,
             "classes_",
             None
         )
 
-        # -------------------------------------------------
-        # Convert prediction to Severity 1-4
-        # -------------------------------------------------
+
         if model_classes is not None:
 
             model_classes = np.asarray(
                 model_classes
             )
 
-            matching_indices = np.where(
+            matching = np.where(
                 model_classes == raw_prediction
             )[0]
 
-            if len(matching_indices) > 0:
+            if len(matching) > 0:
 
                 class_index = int(
-                    matching_indices[0]
+                    matching[0]
                 )
 
             else:
@@ -729,11 +639,11 @@ if st.button(
 
             class_index = raw_prediction
 
-        # Handle both:
-        # [0,1,2,3] and [1,2,3,4]
-        if set([0, 1, 2, 3]).issuperset(
-            {class_index}
-        ):
+
+        # =================================================
+        # SEVERITY
+        # =================================================
+        if class_index in [0, 1, 2, 3]:
 
             severity = class_index + 1
 
@@ -745,20 +655,22 @@ if st.button(
 
             severity = raw_prediction
 
+
         severity = int(
             max(1, min(4, severity))
         )
 
-        # -------------------------------------------------
-        # Probability
-        # -------------------------------------------------
+
+        # =================================================
+        # PROBABILITY
+        # =================================================
         probabilities = None
 
         try:
 
             probabilities = np.asarray(
                 pipeline.predict_proba(
-                    model_input
+                    input_df
                 )[0],
                 dtype=float
             )
@@ -767,16 +679,19 @@ if st.button(
 
             probabilities = None
 
-        # -------------------------------------------------
-        # Confidence
-        # -------------------------------------------------
+
+        # =================================================
+        # CONFIDENCE
+        # =================================================
         if (
             probabilities is not None
             and len(probabilities) > 0
         ):
 
             confidence = (
-                float(np.max(probabilities))
+                float(
+                    np.max(probabilities)
+                )
                 * 100
             )
 
@@ -784,9 +699,10 @@ if st.button(
 
             confidence = None
 
-        # -------------------------------------------------
-        # Risk classification
-        # -------------------------------------------------
+
+        # =================================================
+        # RISK MAP
+        # =================================================
         risk_map = {
 
             1: (
@@ -812,7 +728,9 @@ if st.button(
                 "CRITICAL",
                 "The model predicts the highest severity category."
             )
+
         }
+
 
         icon, risk, message = risk_map.get(
             severity,
@@ -823,8 +741,9 @@ if st.button(
             )
         )
 
+
         # =================================================
-        # MAIN RESULT
+        # RESULT
         # =================================================
         st.markdown(
             f"""
@@ -847,9 +766,12 @@ if st.button(
             unsafe_allow_html=True
         )
 
+
         st.write("")
 
+
         r1, r2, r3 = st.columns(3)
+
 
         with r1:
 
@@ -858,12 +780,14 @@ if st.button(
                 f"Level {severity}"
             )
 
+
         with r2:
 
             st.metric(
                 "Risk Level",
                 risk
             )
+
 
         with r3:
 
@@ -881,7 +805,9 @@ if st.button(
                     "N/A"
                 )
 
+
         st.info(message)
+
 
         # =================================================
         # PROBABILITY CHART
@@ -896,6 +822,7 @@ if st.button(
                 unsafe_allow_html=True
             )
 
+
             labels = [
                 "Severity 1",
                 "Severity 2",
@@ -903,9 +830,14 @@ if st.button(
                 "Severity 4"
             ]
 
-            percentages = probabilities * 100
+
+            percentages = (
+                probabilities * 100
+            )
+
 
             fig = go.Figure()
+
 
             fig.add_trace(
                 go.Bar(
@@ -918,6 +850,7 @@ if st.button(
                     textposition="outside"
                 )
             )
+
 
             fig.update_layout(
                 template="plotly_dark",
@@ -943,10 +876,12 @@ if st.button(
                 )
             )
 
+
             st.plotly_chart(
                 fig,
                 use_container_width=True
             )
+
 
             probability_table = pd.DataFrame({
 
@@ -959,11 +894,13 @@ if st.button(
 
             })
 
+
             st.dataframe(
                 probability_table,
                 use_container_width=True,
                 hide_index=True
             )
+
 
         # =================================================
         # RISK INDICATORS
@@ -973,7 +910,9 @@ if st.button(
             unsafe_allow_html=True
         )
 
+
         q1, q2, q3, q4 = st.columns(4)
+
 
         with q1:
 
@@ -995,6 +934,7 @@ if st.button(
                     "👁️ **Good Visibility**"
                 )
 
+
         with q2:
 
             if precipitation > 0.1:
@@ -1015,6 +955,7 @@ if st.button(
                     "☀️ **Dry Conditions**"
                 )
 
+
         with q3:
 
             if is_rush_hour:
@@ -1029,6 +970,7 @@ if st.button(
                     "🚦 **Normal Traffic Period**"
                 )
 
+
         with q4:
 
             road_complexity = sum([
@@ -1039,6 +981,7 @@ if st.button(
                 stop,
                 roundabout
             ])
+
 
             if road_complexity >= 3:
 
@@ -1052,6 +995,7 @@ if st.button(
                     "🛣️ **Normal Road Environment**"
                 )
 
+
         # =================================================
         # SUMMARY
         # =================================================
@@ -1059,6 +1003,7 @@ if st.button(
             '<div class="section">📝 Prediction Summary</div>',
             unsafe_allow_html=True
         )
+
 
         summary = pd.DataFrame({
 
@@ -1098,11 +1043,13 @@ if st.button(
 
         })
 
+
         st.dataframe(
             summary,
             use_container_width=True,
             hide_index=True
         )
+
 
         # =================================================
         # FINAL ALERT
@@ -1135,8 +1082,12 @@ if st.button(
                 "Lowest severity predicted."
             )
 
+
     except Exception as e:
 
+        # =================================================
+        # DETAILED ERROR
+        # =================================================
         st.error(
             "❌ Prediction failed."
         )
@@ -1146,10 +1097,55 @@ if st.button(
         )
 
         st.warning(
-            "The model loaded successfully, but the input "
-            "features are not fully compatible with the "
-            "saved training pipeline."
+            "The model file loaded successfully, but "
+            "the saved preprocessing pipeline failed "
+            "while processing the prediction input."
         )
+
+        # Show useful debugging information
+        with st.expander("🔧 Technical Debug Information"):
+
+            st.write(
+                "Input shape:",
+                input_df.shape
+            )
+
+            st.write(
+                "Input columns:",
+                list(input_df.columns)
+            )
+
+            if hasattr(pipeline, "named_steps"):
+
+                st.write(
+                    "Pipeline steps:",
+                    list(
+                        pipeline.named_steps.keys()
+                    )
+                )
+
+                for name, step in pipeline.named_steps.items():
+
+                    st.write(
+                        f"Step: {name}"
+                    )
+
+                    st.write(
+                        "Type:",
+                        str(type(step))
+                    )
+
+                    if hasattr(
+                        step,
+                        "feature_names_in_"
+                    ):
+
+                        st.write(
+                            "Expected features:",
+                            list(
+                                step.feature_names_in_
+                            )
+                        )
 
 
 # =========================================================
