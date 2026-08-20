@@ -9,7 +9,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 # =========================================================
 # CUSTOM TRANSFORMER
-# IMPORTANT: Must be defined BEFORE loading the .pkl file
+# IMPORTANT: Must exist BEFORE loading the .pkl
 # =========================================================
 class BooleanToIntTransformer(BaseEstimator, TransformerMixin):
 
@@ -21,16 +21,17 @@ class BooleanToIntTransformer(BaseEstimator, TransformerMixin):
         if isinstance(X, pd.Series):
             return X.replace({True: 1, False: 0}).to_frame()
 
-        return X.replace({True: 1, False: 0})
+        if isinstance(X, pd.DataFrame):
+            return X.replace({True: 1, False: 0})
+
+        return X
 
     def get_feature_names_out(self, input_features=None):
 
         if input_features is None:
-            raise ValueError(
-                "input_features must be provided to get_feature_names_out"
-            )
+            return np.array([], dtype=object)
 
-        return input_features
+        return np.asarray(input_features, dtype=object)
 
 
 # =========================================================
@@ -130,7 +131,6 @@ st.markdown("""
 # =========================================================
 @st.cache_resource
 def load_pipeline():
-
     return joblib.load("best_severity_model.pkl")
 
 
@@ -152,9 +152,7 @@ except FileNotFoundError:
 except Exception as e:
 
     st.error("❌ Could not load best_severity_model.pkl")
-
     st.code(str(e))
-
     st.stop()
 
 
@@ -251,8 +249,9 @@ year = st.sidebar.number_input(
 )
 
 
-# Automatic time features
-
+# =========================================================
+# AUTOMATIC TIME FEATURES
+# =========================================================
 is_weekend = day_of_week in [
     "Saturday",
     "Sunday"
@@ -352,8 +351,7 @@ traffic_signal = st.sidebar.checkbox("Traffic Signal")
 
 
 # =========================================================
-# INPUT DATA
-# EXACT FEATURE NAMES FROM YOUR PIPELINE
+# RAW INPUT DATA
 # =========================================================
 input_df = pd.DataFrame({
 
@@ -411,6 +409,99 @@ input_df = pd.DataFrame({
 
     "Is_Night": [is_night]
 })
+
+
+# =========================================================
+# MODEL INPUT ALIGNMENT
+# =========================================================
+def prepare_model_input(model, df):
+
+    df = df.copy()
+
+    # -----------------------------------------------------
+    # Find the feature names stored by sklearn
+    # -----------------------------------------------------
+    expected_features = getattr(
+        model,
+        "feature_names_in_",
+        None
+    )
+
+    # If the model is a Pipeline, check the first step
+    if expected_features is None and hasattr(model, "named_steps"):
+
+        for _, step in model.named_steps.items():
+
+            if hasattr(step, "feature_names_in_"):
+
+                expected_features = step.feature_names_in_
+                break
+
+    # -----------------------------------------------------
+    # If feature names are available, align them
+    # -----------------------------------------------------
+    if expected_features is not None:
+
+        expected_features = list(expected_features)
+
+        # Common feature-name aliases
+        aliases = {
+
+            "Day_Of_Week": "DayOfWeek",
+            "Day_of_Week": "DayOfWeek",
+            "DayOfWeek": "DayOfWeek",
+
+            "Wind Chill(F)": "Wind_Chill(F)",
+            "Wind_Chill(F)": "Wind_Chill(F)",
+
+            "Wind Speed(mph)": "Wind_Speed(mph)",
+            "Wind_Speed(mph)": "Wind_Speed(mph)",
+
+            "Traffic Signal": "Traffic_Signal",
+            "Traffic_Signal": "Traffic_Signal",
+
+            "Traffic Calming": "Traffic_Calming",
+            "Traffic_Calming": "Traffic_Calming",
+
+            "Give Way": "Give_Way",
+            "Give_Way": "Give_Way",
+
+            "No Exit": "No_Exit",
+            "No_Exit": "No_Exit",
+
+            "Is Weekend": "Is_Weekend",
+            "Is_Weekend": "Is_Weekend",
+
+            "Is Rush Hour": "Is_Rush_Hour",
+            "Is_Rush_Hour": "Is_Rush_Hour",
+
+            "Is Night": "Is_Night",
+            "Is_Night": "Is_Night"
+        }
+
+        # Add missing expected columns
+        for feature in expected_features:
+
+            if feature not in df.columns:
+
+                source_feature = aliases.get(feature)
+
+                if (
+                    source_feature is not None
+                    and source_feature in df.columns
+                ):
+
+                    df[feature] = df[source_feature]
+
+                else:
+
+                    # Safe default
+                    df[feature] = 0
+
+        # Remove columns not used by the model
+        df = df[expected_features]
+
+    return df
 
 
 # =========================================================
@@ -564,17 +655,46 @@ if st.button(
 
     try:
 
-        prediction = pipeline.predict(input_df)
+        # -------------------------------------------------
+        # Prepare exact model input
+        # -------------------------------------------------
+        model_input = prepare_model_input(
+            pipeline,
+            input_df
+        )
+
+        # -------------------------------------------------
+        # Prediction
+        # -------------------------------------------------
+        prediction = pipeline.predict(model_input)
 
         raw_prediction = int(
             np.asarray(prediction).ravel()[0]
         )
 
+        # -------------------------------------------------
+        # Get model classes
+        # -------------------------------------------------
+        model_step = None
 
-        # -------------------------------------------------
-        # Convert model class to displayed severity
-        # -------------------------------------------------
-        model_step = pipeline.named_steps.get("model")
+        if hasattr(pipeline, "named_steps"):
+
+            model_step = pipeline.named_steps.get(
+                "model"
+            )
+
+            # Sometimes final step has another name
+            if model_step is None:
+
+                try:
+
+                    model_step = list(
+                        pipeline.named_steps.values()
+                    )[-1]
+
+                except Exception:
+
+                    model_step = None
 
         model_classes = getattr(
             model_step,
@@ -582,22 +702,26 @@ if st.button(
             None
         )
 
-
+        # -------------------------------------------------
+        # Convert prediction to Severity 1-4
+        # -------------------------------------------------
         if model_classes is not None:
 
             model_classes = np.asarray(
                 model_classes
             )
 
-            try:
+            matching_indices = np.where(
+                model_classes == raw_prediction
+            )[0]
+
+            if len(matching_indices) > 0:
 
                 class_index = int(
-                    np.where(
-                        model_classes == raw_prediction
-                    )[0][0]
+                    matching_indices[0]
                 )
 
-            except Exception:
+            else:
 
                 class_index = raw_prediction
 
@@ -605,16 +729,25 @@ if st.button(
 
             class_index = raw_prediction
 
-
-        # Model was trained with 4 severity classes.
-        if class_index in [0, 1, 2, 3]:
+        # Handle both:
+        # [0,1,2,3] and [1,2,3,4]
+        if set([0, 1, 2, 3]).issuperset(
+            {class_index}
+        ):
 
             severity = class_index + 1
+
+        elif class_index in [1, 2, 3, 4]:
+
+            severity = class_index
 
         else:
 
             severity = raw_prediction
 
+        severity = int(
+            max(1, min(4, severity))
+        )
 
         # -------------------------------------------------
         # Probability
@@ -624,18 +757,22 @@ if st.button(
         try:
 
             probabilities = np.asarray(
-                pipeline.predict_proba(input_df)[0],
+                pipeline.predict_proba(
+                    model_input
+                )[0],
                 dtype=float
             )
 
         except Exception:
 
-            pass
+            probabilities = None
 
-
+        # -------------------------------------------------
+        # Confidence
+        # -------------------------------------------------
         if (
             probabilities is not None
-            and len(probabilities) == 4
+            and len(probabilities) > 0
         ):
 
             confidence = (
@@ -646,7 +783,6 @@ if st.button(
         else:
 
             confidence = None
-
 
         # -------------------------------------------------
         # Risk classification
@@ -678,7 +814,6 @@ if st.button(
             )
         }
 
-
         icon, risk, message = risk_map.get(
             severity,
             (
@@ -687,7 +822,6 @@ if st.button(
                 "Prediction completed."
             )
         )
-
 
         # =================================================
         # MAIN RESULT
@@ -713,12 +847,9 @@ if st.button(
             unsafe_allow_html=True
         )
 
-
         st.write("")
 
-
         r1, r2, r3 = st.columns(3)
-
 
         with r1:
 
@@ -727,14 +858,12 @@ if st.button(
                 f"Level {severity}"
             )
 
-
         with r2:
 
             st.metric(
                 "Risk Level",
                 risk
             )
-
 
         with r3:
 
@@ -752,9 +881,7 @@ if st.button(
                     "N/A"
                 )
 
-
         st.info(message)
-
 
         # =================================================
         # PROBABILITY CHART
@@ -769,7 +896,6 @@ if st.button(
                 unsafe_allow_html=True
             )
 
-
             labels = [
                 "Severity 1",
                 "Severity 2",
@@ -777,9 +903,7 @@ if st.button(
                 "Severity 4"
             ]
 
-
             percentages = probabilities * 100
-
 
             fig = go.Figure()
 
@@ -794,7 +918,6 @@ if st.button(
                     textposition="outside"
                 )
             )
-
 
             fig.update_layout(
                 template="plotly_dark",
@@ -820,12 +943,10 @@ if st.button(
                 )
             )
 
-
             st.plotly_chart(
                 fig,
                 use_container_width=True
             )
-
 
             probability_table = pd.DataFrame({
 
@@ -838,13 +959,11 @@ if st.button(
 
             })
 
-
             st.dataframe(
                 probability_table,
                 use_container_width=True,
                 hide_index=True
             )
-
 
         # =================================================
         # RISK INDICATORS
@@ -854,9 +973,7 @@ if st.button(
             unsafe_allow_html=True
         )
 
-
         q1, q2, q3, q4 = st.columns(4)
-
 
         with q1:
 
@@ -878,7 +995,6 @@ if st.button(
                     "👁️ **Good Visibility**"
                 )
 
-
         with q2:
 
             if precipitation > 0.1:
@@ -899,7 +1015,6 @@ if st.button(
                     "☀️ **Dry Conditions**"
                 )
 
-
         with q3:
 
             if is_rush_hour:
@@ -914,7 +1029,6 @@ if st.button(
                     "🚦 **Normal Traffic Period**"
                 )
 
-
         with q4:
 
             road_complexity = sum([
@@ -925,7 +1039,6 @@ if st.button(
                 stop,
                 roundabout
             ])
-
 
             if road_complexity >= 3:
 
@@ -939,7 +1052,6 @@ if st.button(
                     "🛣️ **Normal Road Environment**"
                 )
 
-
         # =================================================
         # SUMMARY
         # =================================================
@@ -947,7 +1059,6 @@ if st.button(
             '<div class="section">📝 Prediction Summary</div>',
             unsafe_allow_html=True
         )
-
 
         summary = pd.DataFrame({
 
@@ -987,13 +1098,11 @@ if st.button(
 
         })
 
-
         st.dataframe(
             summary,
             use_container_width=True,
             hide_index=True
         )
-
 
         # =================================================
         # FINAL ALERT
@@ -1026,7 +1135,6 @@ if st.button(
                 "Lowest severity predicted."
             )
 
-
     except Exception as e:
 
         st.error(
@@ -1034,13 +1142,13 @@ if st.button(
         )
 
         st.code(
-            str(e)
+            f"{type(e).__name__}: {str(e)}"
         )
 
         st.warning(
-            "Check that the model file is the same pipeline "
-            "used during training and that the feature names "
-            "match the training data."
+            "The model loaded successfully, but the input "
+            "features are not fully compatible with the "
+            "saved training pipeline."
         )
 
 
