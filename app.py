@@ -4,8 +4,37 @@ import numpy as np
 import joblib
 import plotly.graph_objects as go
 
+from sklearn.base import BaseEstimator, TransformerMixin
+
+
 # =========================================================
-# PAGE CONFIGURATION
+# CUSTOM TRANSFORMER
+# IMPORTANT: Must be defined BEFORE loading the .pkl file
+# =========================================================
+class BooleanToIntTransformer(BaseEstimator, TransformerMixin):
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+
+        if isinstance(X, pd.Series):
+            return X.replace({True: 1, False: 0}).to_frame()
+
+        return X.replace({True: 1, False: 0})
+
+    def get_feature_names_out(self, input_features=None):
+
+        if input_features is None:
+            raise ValueError(
+                "input_features must be provided to get_feature_names_out"
+            )
+
+        return input_features
+
+
+# =========================================================
+# PAGE CONFIG
 # =========================================================
 st.set_page_config(
     page_title="Accident Severity Intelligence",
@@ -14,111 +43,118 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # =========================================================
 # CUSTOM CSS
 # =========================================================
 st.markdown("""
 <style>
 
-.main {
-    background-color: #0b1120;
-}
-
 .block-container {
-    padding-top: 2rem;
+    padding-top: 1.5rem;
     padding-bottom: 2rem;
 }
 
 .hero {
-    padding: 25px;
+    padding: 28px;
     border-radius: 20px;
+    margin-bottom: 22px;
     background: linear-gradient(135deg, #111827, #172554);
-    border: 1px solid rgba(255,255,255,0.08);
-    margin-bottom: 25px;
+    border: 1px solid rgba(255,255,255,.10);
 }
 
 .hero h1 {
-    font-size: 42px;
-    margin-bottom: 5px;
+    font-size: 40px;
+    margin: 0 0 8px 0;
 }
 
 .hero p {
     color: #cbd5e1;
-    font-size: 17px;
-}
-
-.metric-card {
-    background: linear-gradient(145deg, #111827, #1e293b);
-    padding: 20px;
-    border-radius: 16px;
-    border: 1px solid rgba(255,255,255,0.08);
-    text-align: center;
-    min-height: 120px;
-}
-
-.metric-title {
-    color: #94a3b8;
-    font-size: 14px;
-}
-
-.metric-value {
-    color: white;
-    font-size: 28px;
-    font-weight: 700;
-    margin-top: 8px;
-}
-
-.section-title {
-    font-size: 23px;
-    font-weight: 700;
-    margin-top: 20px;
-    margin-bottom: 15px;
-}
-
-.result-box {
-    padding: 25px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #172554, #1e3a8a);
-    border: 1px solid rgba(255,255,255,0.12);
-    text-align: center;
-}
-
-.result-title {
-    color: #cbd5e1;
     font-size: 16px;
+    margin: 4px 0;
 }
 
-.result-value {
+.card {
+    padding: 18px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #111827, #1e293b);
+    border: 1px solid rgba(255,255,255,.08);
+    text-align: center;
+    min-height: 105px;
+}
+
+.card-title {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.card-value {
     color: white;
-    font-size: 38px;
-    font-weight: 800;
-    margin-top: 8px;
+    font-size: 27px;
+    font-weight: 700;
+    margin-top: 7px;
 }
 
-.stButton > button {
-    width: 100%;
-    border-radius: 12px;
-    height: 50px;
-    font-size: 17px;
+.section {
+    font-size: 22px;
     font-weight: 700;
+    margin: 22px 0 12px;
+}
+
+.result {
+    padding: 28px;
+    border-radius: 20px;
+    text-align: center;
+    background: linear-gradient(135deg, #172554, #1e3a8a);
+    border: 1px solid rgba(255,255,255,.12);
+}
+
+.result-small {
+    color: #cbd5e1;
+    font-size: 15px;
+}
+
+.result-big {
+    color: white;
+    font-size: 40px;
+    font-weight: 800;
+    margin: 7px 0;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
+
 # =========================================================
 # LOAD MODEL
 # =========================================================
 @st.cache_resource
-def load_model():
+def load_pipeline():
+
     return joblib.load("best_severity_model.pkl")
 
 
 try:
-    pipeline = load_model()
+
+    pipeline = load_pipeline()
+
+except FileNotFoundError:
+
+    st.error("❌ best_severity_model.pkl was not found.")
+
+    st.info(
+        "Make sure best_severity_model.pkl is in the same "
+        "GitHub repository folder as app.py."
+    )
+
+    st.stop()
+
 except Exception as e:
+
     st.error("❌ Could not load best_severity_model.pkl")
-    st.info("Make sure best_severity_model.pkl is in the same folder as app.py")
+
+    st.code(str(e))
+
     st.stop()
 
 
@@ -135,8 +171,8 @@ AI-powered US Traffic Accident Severity Prediction System
 </p>
 
 <p>
-Predict accident severity using weather, road, traffic and
-time-based conditions.
+Analyze weather, road, traffic and time conditions
+to predict accident severity.
 </p>
 
 </div>
@@ -146,36 +182,33 @@ time-based conditions.
 # =========================================================
 # MODEL INFORMATION
 # =========================================================
-with st.expander("🧠 Model Information", expanded=False):
+with st.expander("🧠 Model Information"):
 
-    c1, c2, c3, c4 = st.columns(4)
+    a, b, c, d = st.columns(4)
 
-    with c1:
-        st.metric("Model", "XGBoost")
-
-    with c2:
-        st.metric("Classes", "4")
-
-    with c3:
-        st.metric("Estimators", "200")
-
-    with c4:
-        st.metric("Learning Rate", "0.10")
+    a.metric("Algorithm", "XGBoost")
+    b.metric("Classes", "4")
+    c.metric("Estimators", "200")
+    d.metric("Learning Rate", "0.10")
 
 
 # =========================================================
 # SIDEBAR
 # =========================================================
-st.sidebar.markdown("## 🚗 Accident Information")
-st.sidebar.caption("Enter the accident conditions below.")
+st.sidebar.title("🚗 Accident Inputs")
+
+st.sidebar.caption(
+    "Enter the accident conditions below."
+)
+
 
 # =========================================================
-# ROAD INFORMATION
+# ROAD & TIME
 # =========================================================
-st.sidebar.markdown("### 🛣️ Road & Location")
+st.sidebar.markdown("### 🛣️ Road & Time")
 
 distance = st.sidebar.number_input(
-    "Distance (miles)",
+    "Distance (mi)",
     min_value=0.0,
     max_value=1000.0,
     value=1.0,
@@ -195,96 +228,35 @@ day_of_week = st.sidebar.selectbox(
     ]
 )
 
-# =========================================================
-# WEATHER
-# =========================================================
-st.sidebar.markdown("### 🌦️ Weather Conditions")
-
-temperature = st.sidebar.number_input(
-    "Temperature (°F)",
-    min_value=-50.0,
-    max_value=150.0,
-    value=70.0,
-    step=1.0
-)
-
-wind_chill = st.sidebar.number_input(
-    "Wind Chill (°F)",
-    min_value=-100.0,
-    max_value=150.0,
-    value=70.0,
-    step=1.0
-)
-
-humidity = st.sidebar.slider(
-    "Humidity (%)",
-    min_value=0,
-    max_value=100,
-    value=60
-)
-
-pressure = st.sidebar.number_input(
-    "Pressure (in)",
-    min_value=20.0,
-    max_value=35.0,
-    value=29.9,
-    step=0.1
-)
-
-visibility = st.sidebar.number_input(
-    "Visibility (miles)",
-    min_value=0.0,
-    max_value=100.0,
-    value=10.0,
-    step=0.5
-)
-
-wind_speed = st.sidebar.number_input(
-    "Wind Speed (mph)",
-    min_value=0.0,
-    max_value=200.0,
-    value=8.0,
-    step=1.0
-)
-
-precipitation = st.sidebar.number_input(
-    "Precipitation (in)",
-    min_value=0.0,
-    max_value=20.0,
-    value=0.0,
-    step=0.01
-)
-
-
-# =========================================================
-# TIME INFORMATION
-# =========================================================
-st.sidebar.markdown("### 🕐 Time Information")
-
 hour = st.sidebar.slider(
-    "Accident Hour",
-    min_value=0,
-    max_value=23,
-    value=17
+    "Hour",
+    0,
+    23,
+    17
 )
 
 month = st.sidebar.slider(
     "Month",
-    min_value=1,
-    max_value=12,
-    value=6
+    1,
+    12,
+    6
 )
 
 year = st.sidebar.number_input(
     "Year",
-    min_value=2016,
-    max_value=2035,
-    value=2023,
-    step=1
+    2016,
+    2035,
+    2023,
+    1
 )
 
+
 # Automatic time features
-is_weekend = day_of_week in ["Saturday", "Sunday"]
+
+is_weekend = day_of_week in [
+    "Saturday",
+    "Sunday"
+]
 
 is_rush_hour = (
     7 <= hour <= 9
@@ -300,9 +272,70 @@ is_night = (
 
 
 # =========================================================
-# ROAD / TRAFFIC CONDITIONS
+# WEATHER
 # =========================================================
-st.sidebar.markdown("### 🚦 Road & Traffic Conditions")
+st.sidebar.markdown("### 🌦️ Weather")
+
+temperature = st.sidebar.number_input(
+    "Temperature (°F)",
+    -50.0,
+    150.0,
+    70.0,
+    1.0
+)
+
+wind_chill = st.sidebar.number_input(
+    "Wind Chill (°F)",
+    -100.0,
+    150.0,
+    70.0,
+    1.0
+)
+
+humidity = st.sidebar.slider(
+    "Humidity (%)",
+    0,
+    100,
+    60
+)
+
+pressure = st.sidebar.number_input(
+    "Pressure (in)",
+    20.0,
+    35.0,
+    29.9,
+    0.1
+)
+
+visibility = st.sidebar.number_input(
+    "Visibility (mi)",
+    0.0,
+    100.0,
+    10.0,
+    0.5
+)
+
+wind_speed = st.sidebar.number_input(
+    "Wind Speed (mph)",
+    0.0,
+    200.0,
+    8.0,
+    1.0
+)
+
+precipitation = st.sidebar.number_input(
+    "Precipitation (in)",
+    0.0,
+    20.0,
+    0.0,
+    0.01
+)
+
+
+# =========================================================
+# ROAD / TRAFFIC
+# =========================================================
+st.sidebar.markdown("### 🚦 Road & Traffic")
 
 amenity = st.sidebar.checkbox("Amenity")
 bump = st.sidebar.checkbox("Bump")
@@ -319,141 +352,197 @@ traffic_signal = st.sidebar.checkbox("Traffic Signal")
 
 
 # =========================================================
-# CREATE INPUT DATAFRAME
+# INPUT DATA
+# EXACT FEATURE NAMES FROM YOUR PIPELINE
 # =========================================================
-input_data = pd.DataFrame({
+input_df = pd.DataFrame({
 
     "Distance(mi)": [distance],
 
     "Temperature(F)": [temperature],
+
     "Wind_Chill(F)": [wind_chill],
+
     "Humidity(%)": [humidity],
+
     "Pressure(in)": [pressure],
+
     "Visibility(mi)": [visibility],
+
     "Wind_Speed(mph)": [wind_speed],
+
     "Precipitation(in)": [precipitation],
 
     "Hour": [hour],
+
     "Month": [month],
+
     "Year": [year],
 
     "DayOfWeek": [day_of_week],
 
     "Amenity": [amenity],
+
     "Bump": [bump],
+
     "Crossing": [crossing],
+
     "Give_Way": [give_way],
+
     "Junction": [junction],
+
     "No_Exit": [no_exit],
+
     "Railway": [railway],
+
     "Roundabout": [roundabout],
+
     "Station": [station],
+
     "Stop": [stop],
+
     "Traffic_Calming": [traffic_calming],
+
     "Traffic_Signal": [traffic_signal],
 
     "Is_Weekend": [is_weekend],
+
     "Is_Rush_Hour": [is_rush_hour],
+
     "Is_Night": [is_night]
 })
 
 
 # =========================================================
-# TOP METRICS
+# CURRENT CONDITIONS
 # =========================================================
+st.markdown(
+    '<div class="section">📡 Current Conditions</div>',
+    unsafe_allow_html=True
+)
+
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
-    st.markdown("""
-    <div class="metric-card">
-    <div class="metric-title">🌡️ Temperature</div>
-    <div class="metric-value">""" + f"{temperature:.0f}°F" + """</div>
-    </div>
-    """, unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div class="card">
+
+        <div class="card-title">
+        🌡️ Temperature
+        </div>
+
+        <div class="card-value">
+        {temperature:.0f}°F
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 with c2:
-    st.markdown("""
-    <div class="metric-card">
-    <div class="metric-title">💧 Humidity</div>
-    <div class="metric-value">""" + f"{humidity}%" + """</div>
-    </div>
-    """, unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div class="card">
+
+        <div class="card-title">
+        💧 Humidity
+        </div>
+
+        <div class="card-value">
+        {humidity}%
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 with c3:
-    st.markdown("""
-    <div class="metric-card">
-    <div class="metric-title">👁️ Visibility</div>
-    <div class="metric-value">""" + f"{visibility:.1f} mi" + """</div>
-    </div>
-    """, unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div class="card">
+
+        <div class="card-title">
+        👁️ Visibility
+        </div>
+
+        <div class="card-value">
+        {visibility:.1f} mi
+        </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 with c4:
+
     period = "🌙 Night" if is_night else "☀️ Day"
 
-    st.markdown("""
-    <div class="metric-card">
-    <div class="metric-title">🕐 Period</div>
-    <div class="metric-value">""" + period + """</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div class="card">
 
+        <div class="card-title">
+        🕐 Period
+        </div>
 
-st.markdown("")
+        <div class="card-value">
+        {period}
+        </div>
 
-
-# =========================================================
-# CURRENT CONDITIONS
-# =========================================================
-st.markdown('<div class="section-title">📡 Current Accident Conditions</div>',
-            unsafe_allow_html=True)
-
-condition1, condition2, condition3 = st.columns(3)
-
-with condition1:
-
-    if is_rush_hour:
-        st.warning("🚦 **Rush Hour Detected**\n\nTraffic density may be higher.")
-    else:
-        st.success("✅ **Non-Rush Hour**\n\nNormal traffic period.")
-
-with condition2:
-
-    if is_night:
-        st.warning("🌙 **Night-Time Accident**\n\nReduced visibility may increase risk.")
-    else:
-        st.success("☀️ **Day-Time Accident**\n\nDaylight conditions detected.")
-
-with condition3:
-
-    if precipitation > 0:
-        st.warning("🌧️ **Precipitation Present**\n\nWet conditions detected.")
-    else:
-        st.success("☀️ **No Precipitation**\n\nDry weather condition.")
-
-
-# =========================================================
-# INPUT SUMMARY
-# =========================================================
-with st.expander("📋 View Complete Input Data"):
-
-    st.dataframe(
-        input_data.T.rename(columns={0: "Value"}),
-        use_container_width=True
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
 
 # =========================================================
-# PREDICTION BUTTON
+# CONDITION ALERTS
 # =========================================================
-st.markdown("---")
+x1, x2, x3 = st.columns(3)
 
-predict_col1, predict_col2, predict_col3 = st.columns([1, 2, 1])
+with x1:
 
-with predict_col2:
+    if is_rush_hour:
+        st.warning("🚦 **Rush Hour Detected**")
+    else:
+        st.success("✅ **Non-Rush Hour**")
 
-    predict_button = st.button(
-        "🚨 ANALYZE ACCIDENT SEVERITY",
-        type="primary",
+
+with x2:
+
+    if precipitation > 0:
+        st.warning("🌧️ **Precipitation Present**")
+    else:
+        st.success("☀️ **Dry Conditions**")
+
+
+with x3:
+
+    if is_weekend:
+        st.info("📅 **Weekend**")
+    else:
+        st.info("📅 **Weekday**")
+
+
+# =========================================================
+# INPUT PREVIEW
+# =========================================================
+with st.expander("📋 View Input Data"):
+
+    st.dataframe(
+        input_df.T.rename(
+            columns={0: "Value"}
+        ),
         use_container_width=True
     )
 
@@ -461,26 +550,71 @@ with predict_col2:
 # =========================================================
 # PREDICTION
 # =========================================================
-if predict_button:
+st.markdown(
+    '<div class="section">🎯 Prediction</div>',
+    unsafe_allow_html=True
+)
+
+
+if st.button(
+    "🚨 ANALYZE ACCIDENT SEVERITY",
+    type="primary",
+    use_container_width=True
+):
 
     try:
 
-        # Pipeline handles preprocessing automatically
-        prediction = pipeline.predict(input_data)
+        prediction = pipeline.predict(input_df)
 
-        predicted_class = int(prediction[0])
+        raw_prediction = int(
+            np.asarray(prediction).ravel()[0]
+        )
+
 
         # -------------------------------------------------
-        # Convert model class to display severity
+        # Convert model class to displayed severity
         # -------------------------------------------------
-        #
-        # If model classes are 0,1,2,3:
-        # display as Severity 1,2,3,4
-        #
-        if predicted_class in [0, 1, 2, 3]:
-            display_severity = predicted_class + 1
+        model_step = pipeline.named_steps.get("model")
+
+        model_classes = getattr(
+            model_step,
+            "classes_",
+            None
+        )
+
+
+        if model_classes is not None:
+
+            model_classes = np.asarray(
+                model_classes
+            )
+
+            try:
+
+                class_index = int(
+                    np.where(
+                        model_classes == raw_prediction
+                    )[0][0]
+                )
+
+            except Exception:
+
+                class_index = raw_prediction
+
         else:
-            display_severity = predicted_class
+
+            class_index = raw_prediction
+
+
+        # Model was trained with 4 severity classes.
+        if class_index in [0, 1, 2, 3]:
+
+            severity = class_index + 1
+
+        else:
+
+            severity = raw_prediction
+
 
         # -------------------------------------------------
         # Probability
@@ -488,65 +622,90 @@ if predict_button:
         probabilities = None
 
         try:
-            probabilities = pipeline.predict_proba(input_data)[0]
+
+            probabilities = np.asarray(
+                pipeline.predict_proba(input_df)[0],
+                dtype=float
+            )
+
         except Exception:
-            probabilities = None
 
-        # -------------------------------------------------
-        # Risk classification
-        # -------------------------------------------------
-        if display_severity == 1:
+            pass
 
-            risk_level = "LOW"
-            risk_icon = "🟢"
-            risk_message = (
-                "The model predicts a relatively low-severity accident."
-            )
 
-        elif display_severity == 2:
+        if (
+            probabilities is not None
+            and len(probabilities) == 4
+        ):
 
-            risk_level = "MODERATE"
-            risk_icon = "🟡"
-            risk_message = (
-                "The model predicts a moderate-severity accident."
-            )
-
-        elif display_severity == 3:
-
-            risk_level = "HIGH"
-            risk_icon = "🟠"
-            risk_message = (
-                "The model predicts a high-severity accident."
+            confidence = (
+                float(np.max(probabilities))
+                * 100
             )
 
         else:
 
-            risk_level = "CRITICAL"
-            risk_icon = "🔴"
-            risk_message = (
-                "The model predicts a critical/highest-severity accident."
+            confidence = None
+
+
+        # -------------------------------------------------
+        # Risk classification
+        # -------------------------------------------------
+        risk_map = {
+
+            1: (
+                "🟢",
+                "LOW",
+                "The model predicts the lowest severity category."
+            ),
+
+            2: (
+                "🟡",
+                "MODERATE",
+                "The model predicts a moderate severity accident."
+            ),
+
+            3: (
+                "🟠",
+                "HIGH",
+                "The model predicts a high severity accident."
+            ),
+
+            4: (
+                "🔴",
+                "CRITICAL",
+                "The model predicts the highest severity category."
             )
+        }
+
+
+        icon, risk, message = risk_map.get(
+            severity,
+            (
+                "⚪",
+                "UNKNOWN",
+                "Prediction completed."
+            )
+        )
 
 
         # =================================================
-        # RESULT
+        # MAIN RESULT
         # =================================================
-        st.markdown("---")
-
         st.markdown(
             f"""
-            <div class="result-box">
+            <div class="result">
 
-            <div class="result-title">
+            <div class="result-small">
             🚨 PREDICTED ACCIDENT SEVERITY
             </div>
 
-            <div class="result-value">
-            Severity {display_severity}
+            <div class="result-big">
+            Severity {severity}
             </div>
 
-            <div style="font-size:22px; margin-top:12px;">
-            {risk_icon} {risk_level} RISK
+            <div style="font-size:22px;">
+            {icon} {risk} RISK
             </div>
 
             </div>
@@ -555,32 +714,31 @@ if predict_button:
         )
 
 
-        st.markdown("")
+        st.write("")
 
 
-        # =================================================
-        # RESULT METRICS
-        # =================================================
         r1, r2, r3 = st.columns(3)
+
 
         with r1:
 
             st.metric(
                 "Predicted Severity",
-                f"Level {display_severity}"
+                f"Level {severity}"
             )
+
 
         with r2:
 
             st.metric(
                 "Risk Level",
-                risk_level
+                risk
             )
+
 
         with r3:
 
-            if probabilities is not None:
-                confidence = float(np.max(probabilities)) * 100
+            if confidence is not None:
 
                 st.metric(
                     "Model Confidence",
@@ -590,66 +748,78 @@ if predict_button:
             else:
 
                 st.metric(
-                    "Model",
-                    "XGBoost"
+                    "Model Confidence",
+                    "N/A"
                 )
 
 
-        st.info(risk_message)
+        st.info(message)
 
 
         # =================================================
         # PROBABILITY CHART
         # =================================================
-        if probabilities is not None:
+        if (
+            probabilities is not None
+            and len(probabilities) == 4
+        ):
 
             st.markdown(
-                '<div class="section-title">📊 Severity Probability Analysis</div>',
+                '<div class="section">📊 Severity Probability Distribution</div>',
                 unsafe_allow_html=True
             )
 
-            severity_labels = [
+
+            labels = [
                 "Severity 1",
                 "Severity 2",
                 "Severity 3",
                 "Severity 4"
             ]
 
-            probability_percent = probabilities * 100
+
+            percentages = probabilities * 100
+
 
             fig = go.Figure()
 
             fig.add_trace(
                 go.Bar(
-                    x=severity_labels,
-                    y=probability_percent,
+                    x=labels,
+                    y=percentages,
                     text=[
-                        f"{x:.2f}%"
-                        for x in probability_percent
+                        f"{p:.2f}%"
+                        for p in percentages
                     ],
                     textposition="outside"
                 )
             )
 
+
             fig.update_layout(
-                title="Prediction Probability Distribution",
+                template="plotly_dark",
+                height=430,
                 yaxis_title="Probability (%)",
                 xaxis_title="Accident Severity",
                 yaxis=dict(
                     range=[
                         0,
-                        max(100, max(probability_percent) + 15)
+                        max(
+                            100,
+                            float(
+                                max(percentages)
+                            ) + 15
+                        )
                     ]
                 ),
-                template="plotly_dark",
-                height=430,
                 margin=dict(
                     l=20,
                     r=20,
-                    t=60,
+                    t=40,
                     b=20
                 )
             )
+
 
             st.plotly_chart(
                 fig,
@@ -657,89 +827,97 @@ if predict_button:
             )
 
 
+            probability_table = pd.DataFrame({
+
+                "Severity": labels,
+
+                "Probability": [
+                    f"{p:.2f}%"
+                    for p in percentages
+                ]
+
+            })
+
+
+            st.dataframe(
+                probability_table,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
         # =================================================
         # RISK INDICATORS
         # =================================================
         st.markdown(
-            '<div class="section-title">🔎 Risk Indicators</div>',
+            '<div class="section">🔎 Risk Indicators</div>',
             unsafe_allow_html=True
         )
 
-        risk1, risk2, risk3, risk4 = st.columns(4)
+
+        q1, q2, q3, q4 = st.columns(4)
 
 
-        # Visibility
-        with risk1:
+        with q1:
 
             if visibility < 3:
 
                 st.error(
-                    "👁️ **Low Visibility**\n\n"
-                    "Visibility is below 3 miles."
+                    "👁️ **Low Visibility**"
                 )
 
             elif visibility < 6:
 
                 st.warning(
-                    "👁️ **Reduced Visibility**\n\n"
-                    "Visibility is moderate."
+                    "👁️ **Reduced Visibility**"
                 )
 
             else:
 
                 st.success(
-                    "👁️ **Good Visibility**\n\n"
-                    "Visibility is relatively good."
+                    "👁️ **Good Visibility**"
                 )
 
 
-        # Weather
-        with risk2:
+        with q2:
 
             if precipitation > 0.1:
 
                 st.error(
-                    "🌧️ **Heavy Precipitation**\n\n"
-                    "Wet conditions detected."
+                    "🌧️ **Heavy Precipitation**"
                 )
 
             elif precipitation > 0:
 
                 st.warning(
-                    "🌦️ **Precipitation**\n\n"
-                    "Some precipitation detected."
+                    "🌦️ **Precipitation**"
                 )
 
             else:
 
                 st.success(
-                    "☀️ **Dry Conditions**\n\n"
-                    "No precipitation."
+                    "☀️ **Dry Conditions**"
                 )
 
 
-        # Traffic
-        with risk3:
+        with q3:
 
             if is_rush_hour:
 
                 st.warning(
-                    "🚦 **Rush Hour**\n\n"
-                    "Higher traffic activity."
+                    "🚦 **Rush Hour**"
                 )
 
             else:
 
                 st.success(
-                    "🚦 **Normal Traffic Period**\n\n"
-                    "Outside rush hour."
+                    "🚦 **Normal Traffic Period**"
                 )
 
 
-        # Road features
-        with risk4:
+        with q4:
 
-            infrastructure_count = sum([
+            road_complexity = sum([
                 junction,
                 railway,
                 crossing,
@@ -748,32 +926,33 @@ if predict_button:
                 roundabout
             ])
 
-            if infrastructure_count >= 3:
+
+            if road_complexity >= 3:
 
                 st.warning(
-                    "🛣️ **Complex Road Environment**\n\n"
-                    f"{infrastructure_count} infrastructure "
-                    "features selected."
+                    "🛣️ **Complex Road Environment**"
                 )
 
             else:
 
                 st.success(
-                    "🛣️ **Normal Road Environment**\n\n"
-                    "Limited infrastructure complexity."
+                    "🛣️ **Normal Road Environment**"
                 )
 
 
         # =================================================
-        # PREDICTION SUMMARY
+        # SUMMARY
         # =================================================
         st.markdown(
-            '<div class="section-title">📝 Prediction Summary</div>',
+            '<div class="section">📝 Prediction Summary</div>',
             unsafe_allow_html=True
         )
 
-        summary_data = pd.DataFrame({
+
+        summary = pd.DataFrame({
+
             "Parameter": [
+
                 "Predicted Severity",
                 "Risk Level",
                 "Day",
@@ -786,11 +965,13 @@ if predict_button:
                 "Visibility",
                 "Precipitation",
                 "Distance"
+
             ],
 
             "Value": [
-                f"Severity {display_severity}",
-                risk_level,
+
+                f"Severity {severity}",
+                risk,
                 day_of_week,
                 f"{hour}:00",
                 "Yes" if is_weekend else "No",
@@ -798,87 +979,68 @@ if predict_button:
                 "Yes" if is_night else "No",
                 f"{temperature:.1f} °F",
                 f"{humidity}%",
-                f"{visibility:.1f} miles",
+                f"{visibility:.1f} mi",
                 f"{precipitation:.2f} in",
-                f"{distance:.2f} miles"
+                f"{distance:.2f} mi"
+
             ]
+
         })
 
+
         st.dataframe(
-            summary_data,
+            summary,
             use_container_width=True,
             hide_index=True
         )
 
 
         # =================================================
-        # MODEL PROBABILITY TABLE
-        # =================================================
-        if probabilities is not None:
-
-            st.markdown(
-                '<div class="section-title">🎯 Model Confidence Breakdown</div>',
-                unsafe_allow_html=True
-            )
-
-            probability_table = pd.DataFrame({
-                "Severity": severity_labels,
-                "Probability": [
-                    f"{p:.2f}%"
-                    for p in probability_percent
-                ]
-            })
-
-            st.dataframe(
-                probability_table,
-                use_container_width=True,
-                hide_index=True
-            )
-
-
-        # =================================================
         # FINAL ALERT
         # =================================================
-        if display_severity >= 4:
+        if severity == 4:
 
             st.error(
-                "🚨 **CRITICAL ALERT**\n\n"
-                "The model has classified this scenario as "
-                "the highest severity category."
+                "🚨 **CRITICAL ALERT:** "
+                "Highest severity category predicted."
             )
 
-        elif display_severity == 3:
+        elif severity == 3:
 
             st.warning(
-                "⚠️ **HIGH-RISK SCENARIO**\n\n"
-                "The predicted severity is high. "
-                "Extra caution is recommended."
+                "⚠️ **HIGH-RISK SCENARIO:** "
+                "High severity predicted."
             )
 
-        elif display_severity == 2:
+        elif severity == 2:
 
             st.info(
-                "ℹ️ **MODERATE-RISK SCENARIO**\n\n"
-                "The predicted accident severity is moderate."
+                "ℹ️ **MODERATE-RISK SCENARIO:** "
+                "Moderate severity predicted."
             )
 
         else:
 
             st.success(
-                "✅ **LOW-RISK SCENARIO**\n\n"
-                "The model predicts the lowest severity category."
+                "✅ **LOW-RISK SCENARIO:** "
+                "Lowest severity predicted."
             )
 
 
     except Exception as e:
 
-        st.error("❌ Prediction failed.")
+        st.error(
+            "❌ Prediction failed."
+        )
 
-        st.code(str(e))
+        st.code(
+            str(e)
+        )
 
         st.warning(
-            "Please check that the feature names and data types "
-            "match those used during model training."
+            "Check that the model file is the same pipeline "
+            "used during training and that the feature names "
+            "match the training data."
         )
 
 
@@ -889,9 +1051,14 @@ st.markdown("---")
 
 st.markdown(
     """
-    <div style="text-align:center; color:#64748b; padding:15px;">
+    <div style="
+        text-align:center;
+        color:#64748b;
+        padding:12px;
+    ">
 
-    <b>🚨 Accident Severity Intelligence Dashboard</b><br>
+    <b>🚨 Accident Severity Intelligence Dashboard</b>
+    <br>
 
     Machine Learning • XGBoost • Traffic Accident Analytics
 
